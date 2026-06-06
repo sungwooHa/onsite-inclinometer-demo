@@ -1,0 +1,31 @@
+# 브리지 설정 예시 — 복사해서 config.yaml 로 저장 후 값만 채우세요.
+#   cp config.example.yaml config.yaml
+# config.yaml 은 .gitignore 처리됨(토큰 노출 방지).
+
+serial:
+  # macOS:   ls /dev/cu.*        예) /dev/cu.usbserial-0001, /dev/cu.SLAB_USBtoUART
+  # Windows: 장치관리자 COM 포트  예) COM3
+  port: "/dev/cu.usbserial-0001"
+  baudrate: 115200
+
+api:
+  # === 온사이트 계측 API 명세에 맞춰 채우세요 (docs/api-contract.md) ===
+  url: "https://onsite.example.com/api/measurements"
+  method: "POST"
+  headers:
+    Authorization: "Bearer <YOUR_TOKEN>"
+    Content-Type: "application/json"
+
+measurement:
+  sensor_id: "INCL-01"      # 위험으로 띄울 계측점 ID
+  unit: "mm"
+
+  # 관리기준 — 지중경사계 누적변위 "예시값". 실제 현장 기준으로 교체하세요.
+  level1: 10                # 1차(주의)
+  level2: 20                # 2차(경계)
+  level3: 30                # 3차(위험/한계)
+  danger_max: 50            # 3차 초과 랜덤값의 상한
+
+  reset_on_normal: true     # NORMAL 이벤트 시 평시 값 전송 여부
+  burst_count: 1            # DANGER 시 주입할 데이터 포인트 수(>1 이면 짧은 시계열)
+  burst_interval_s: 0.5     # 버스트 간 간격(초)
