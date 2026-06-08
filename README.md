@@ -1,41 +1,46 @@
 # ESP32 지중경사계 온사이트 시연
 
-모형 벽을 손으로 기울이면 → ESP32+자이로가 감지 → 컴퓨터가 신호를 받아
-**온사이트 계측 API**로 "3차 관리기준 초과" 데이터를 주입 → 옆에 띄워둔
-**기존 온사이트 대시보드**가 `평시 → 위험시`로 바뀌는 라이브 데모.
+모형 벽을 손으로 기울이면 → ESP32+자이로가 감지 → **블루투스로 연결된 노트북**이
+신호를 받아 **온사이트 계측 수집 API**로 "3차 관리기준 초과" 데이터를 주입 →
+옆에 띄워둔 **기존 온사이트 대시보드**가 `평시 → 위험시`로 바뀌는 라이브 데모.
+
+> 온사이트 서비스는 **AWS에서 운영**되며 계측센서 데이터 수집용 HTTP API가 열려 있다.
+> 노트북 게이트웨이는 그 수집 API로 HTTP POST를 보낸다. (별도 신규 서버·대시보드 없음)
 
 ## 시연 시나리오
 1. 평상시: 대시보드는 평시(정상 범위) 상태.
 2. 진행자가 모형의 한쪽 벽을 기울인다(지중경사계가 변위된 상황 모사).
-3. MPU6050이 기울기를 감지, 임계각 초과가 잠깐 지속되면 ESP32가 `DANGER` 신호 송신.
-4. 컴퓨터의 브리지가 신호를 받아 3차 기준을 초과하는 랜덤 계측값을 API로 전송.
+3. MPU6050이 기울기를 감지, roll 임계 초과가 히스테리시스를 통과하면 ESP32가
+   `STATE_CHANGED`(state=`TILTED`) 이벤트를 블루투스로 송신.
+4. 노트북의 브리지가 이를 받아 3차 기준을 초과하는 랜덤 계측값을 수집 API로 전송.
 5. 대시보드가 위험시로 전환. 벽을 다시 세우면 `NORMAL` → 평시로 복귀(옵션).
 
 ## 확정된 설계 결정
 | 항목 | 결정 |
 |------|------|
-| 통신 | ESP32 → **USB 시리얼** → 컴퓨터 브리지 → **온사이트 API**(기존) |
-| 벽 작동 | **수동 기울임** + 자이로 감지 (서보·버튼 제어 없음) |
-| 하드웨어 | **ESP32 DevKit + MPU6050** (I2C, GPIO21/22) |
+| 통신 | ESP32 → **블루투스(Classic SPP)** → 노트북 게이트웨이 → **온사이트 수집 API** |
+| 서버 | 온사이트 서비스는 **AWS에서 운영**, 계측 수집용 HTTP API로 POST |
+| 벽 작동 | **수동 기울임** + 자이로 감지 (서보·모터 제어 없음) |
+| 하드웨어 | **ESP32 DevKit + MPU6050**(I2C) + 부저·버튼·상태 LED |
 | 대시보드 | **기존 온사이트 대시보드 사용** — 신규 제작 없음 |
 
-> 왜 컴퓨터 브리지인가? 온사이트 API 호출에는 인증/CORS가 얽혀 브라우저 직결보다
-> 서버 측 호출이 견고하고, 랜덤 데이터 생성·관리기준 로직을 한 곳에 둘 수 있다.
-> USB 시리얼은 현장 와이파이에 의존하지 않아 데모 안정성이 가장 높다.
+> 왜 노트북 브리지인가? 수집 API 호출에는 인증/CORS가 얽혀 브라우저 직결보다
+> 노트북 측 호출이 견고하고, 랜덤 데이터 생성·관리기준 로직을 한 곳에 둘 수 있다.
+> 블루투스는 ESP32↔노트북 1:1 연결이라 현장 와이파이에 의존하지 않아 데모 안정성이 높다.
 
 ## 데이터 흐름
 ```
  [모형 벽: 수동 기울임]
         │ (기울기 변화)
         ▼
-   [MPU6050] ──I2C── [ESP32 DevKit]
-                          │  USB Serial (줄단위 JSON, 115200)
-                          │  {"event":"DANGER","angle":7.8}
+   [MPU6050] ──I2C── [ESP32 DevKit] ── 부저 / 버튼 / 상태 LED
+                          │  Bluetooth SPP (줄단위 JSON)
+                          │  {"event":"STATE_CHANGED","state":"TILTED",...}
                           ▼
-                  [컴퓨터: bridge.py]
+                  [노트북: bridge.py]   ← 블루투스 포트를 시리얼처럼 연다
                           │  HTTP POST (3차 초과 랜덤 계측값)
                           ▼
-                 [온사이트 계측 API]  ← 기존 시스템
+              [온사이트 계측 수집 API]   ← AWS에서 운영
                           │
                           ▼
             [기존 온사이트 웹 대시보드]   평시 → 위험시
@@ -47,60 +52,82 @@ esp32-inclinometer-demo/
 ├── README.md                          # 이 문서 (전략·아키텍처·실행법)
 ├── firmware/
 │   └── esp32_inclinometer/
-│       └── esp32_inclinometer.ino     # MPU6050 기울기 감지 + 시리얼 신호 (의존성 없음)
+│       └── esp32_inclinometer.ino     # MPU6050 roll 감지 + 블루투스 + 부저/버튼/LED
 ├── bridge/
-│   ├── bridge.py                      # 시리얼 수신 → 온사이트 API 호출
+│   ├── bridge.py                      # 블루투스(시리얼) 수신 → 온사이트 수집 API 호출
 │   ├── config.example.yaml            # 설정 템플릿 (복사해서 config.yaml)
 │   └── requirements.txt
 └── docs/
-    ├── wiring.md                      # 배선·핀맵·업로드·임계값 튜닝
-    └── api-contract.md                # ★ 온사이트 API 명세 (채워야 함)
+    ├── wiring.md                      # 배선·핀맵·업로드·상태 판정 튜닝
+    └── api-contract.md                # ★ 온사이트 수집 API 명세 (채워야 함)
 ```
 
-## 신호 프로토콜 (시리얼, 줄단위 JSON)
-| 종류 | 예시 | 의미 |
-|------|------|------|
-| 이벤트 | `{"event":"DANGER","angle":7.8}` | 임계 초과 → 위험 주입 |
-| 이벤트 | `{"event":"NORMAL","angle":1.2}` | 평시 복귀 |
-| 텔레메트리 | `{"t":12345,"angle":3.2,"state":"NORMAL"}` | 디버그용(브리지 무시) |
-| 부팅 | `{"event":"BASELINE_SET"}` | 영점 캡처 완료 |
+## 신호 프로토콜 (블루투스 SPP, 줄단위 JSON)
+ESP32는 줄 단위 JSON을 USB Serial과 블루투스로 동시에 출력한다. 브리지는 블루투스로 받는다.
 
-상태 전환은 히스테리시스로 안정화: `TRIGGER_DEG`(5°) 초과가 `SUSTAIN_MS`(400ms)
-지속되면 DANGER, `RESET_DEG`(2°) 미만이 지속되면 NORMAL. (펌웨어 상단 상수로 조정)
+| 종류 | 예시 | 브리지 처리 |
+|------|------|------|
+| 상태 변경 | `{"event":"STATE_CHANGED","state":"TILTED",...}` | 위험 주입 |
+| 상태 변경 | `{"event":"STATE_CHANGED","state":"NORMAL",...}` | 평시 복귀 |
+| 연결 알림 | `{"event":"BT_CONNECTED","deviceId":"..."}` | 무시 |
+| BT 제어 | `{"event":"BT_RESTART_REQUESTED"}` / `BT_PAIRING_RESET_REQUESTED` | 무시 |
+
+`STATE_CHANGED` 전체 필드: `deviceId`, `deviceName`, `bluetoothName`,
+`previousState`, `state`, `reason`, `roll`, `pitch`, `gyroZ`, `moving`.
+
+> 브리지는 구형 `{"event":"DANGER"}` / `{"event":"NORMAL"}` 형식도 하위호환으로 받는다
+> (`bridge.py`의 `event_to_action()`).
+
+상태 전환은 히스테리시스로 안정화: `roll`이 `TILTED_ROLL_THRESHOLD`(-100°) 미만이면
+기울어짐, `NORMAL_ROLL_THRESHOLD`(-97°) 초과면 정상, 그 사이는 직전 상태 유지.
+임계는 **장착 자세에 따라 달라진다**(현재 장착 기준 정상 roll ≈ -93, 기울어짐 ≈ -113).
+펌웨어 상단 상수로 조정.
+
+## 현장 UX (펌웨어)
+- **상태 LED**(보드 내장): BT 대기=느린 점멸, 연결=ON 고정, 재시작 중=빠른 3회, 페어링 초기화 중=빠른 8회.
+- **부저**: BT 연결 + 기울어짐일 때만 장음(1200ms ON / 800ms OFF). 그 외엔 정지.
+- **버튼**: 짧게 누름=BT 재시작 / 2초 이상 길게=ESP32 본딩(페어링) 삭제 후 재시작. (BT 미연결에도 동작)
+- BT가 연결돼 있지 않으면 센서·부저는 정지하고 버튼·LED만 동작한다.
 
 ## 실행 방법
 
 ### 1) 펌웨어 업로드
 - `docs/wiring.md` 따라 배선 후 Arduino IDE로 `esp32_inclinometer.ino` 업로드.
-- 시리얼 모니터(115200)에서 기울일 때 `DANGER` 이벤트가 뜨는지 먼저 확인.
+- 시리얼 모니터(115200)에서 부팅 배너를 확인. **단, 센서·이벤트는 블루투스 클라이언트가
+  연결돼야 동작**하므로, 연결 전에는 `[SYSTEM]` 안내와 LED 느린 점멸만 보인다.
 
-### 2) 브리지 실행
+### 2) 블루투스 페어링
+- 노트북 BT 설정에서 `MIDAS_ONSITE_SENSOR` 페어링.
+- ★ 페어링만으로는 부족하다 — 노트북이 **나가는(outgoing) 포트**를 열어야 ESP32가
+  연결로 인식(LED ON 고정)한다. 아래 `bridge.py`가 그 포트를 연다.
+
+### 3) 브리지 실행
 ```bash
 cd bridge
 python3 -m venv .venv && source .venv/bin/activate   # (선택)
 pip install -r requirements.txt
-cp config.example.yaml config.yaml                   # 값 채우기 (시리얼 포트, API)
+cp config.example.yaml config.yaml                   # serial.port=BT 포트, api 값 채우기
 
 # API 없이 페이로드 형식만 확인
 python bridge.py --config config.yaml --dry-run
 
-# ESP32 없이 키보드로 흐름 테스트 (d=위험, n=평시, q=종료)
+# 하드웨어 없이 키보드로 흐름 테스트 (d=위험, n=평시, q=종료)
 python bridge.py --config config.yaml --simulate --dry-run
 
-# 실전: ESP32 연결 + 실제 API 전송
+# 실전: 블루투스 연결 + 실제 API 전송
 python bridge.py --config config.yaml
 ```
 
 ## 남은 작업 / 필요한 정보
-- [ ] **온사이트 API 명세 확정** — `docs/api-contract.md`의 체크리스트.
+- [ ] **온사이트 수집 API 명세 확정** — `docs/api-contract.md`의 체크리스트.
       (엔드포인트/인증/페이로드 스키마, 위험 판정이 서버측인지 우리가 level을 보내는지,
       단일 포인트 vs 시계열, 평시 복귀 방법, 실제 1/2/3차 관리기준값)
 - [ ] 확정 후 `config.yaml` + `build_payload()` 정합.
-- [ ] 실 하드웨어로 임계각/유지시간 튜닝, 모형에 MPU6050 견고 고정.
+- [ ] 실 하드웨어로 roll 임계/장착 자세 튜닝, 모형에 MPU6050 견고 고정.
 - [ ] (선택) 위험 후 자동/수동 복귀 동선 결정, 리허설.
 
 ## 마일스톤
-1. **HW 검증** — 배선 후 시리얼에서 기울기 각도/이벤트 확인 *(코드 준비됨)*
+1. **HW 검증** — 배선 + 블루투스 연결 후 기울일 때 `STATE_CHANGED` 확인
 2. **API 연동** — 명세 받아 `--dry-run`으로 페이로드 맞춤 → 실전송
 3. **통합 리허설** — 벽 기울임→대시보드 위험 전환 end-to-end, 임계값 튜닝
 4. **현장 시연** — 복귀 동선 포함 최종 점검

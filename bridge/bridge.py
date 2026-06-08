@@ -3,12 +3,12 @@
 온사이트 지중경사계 시연 브리지
 
 흐름:
-  ESP32(MPU6050) --USB 시리얼--> bridge.py --HTTP--> 온사이트 계측 API --> 기존 대시보드
+  ESP32(MPU6050) --블루투스(시리얼 포트)--> bridge.py --HTTP--> 온사이트 수집 API --> 기존 대시보드
 
 동작:
-  - ESP32가 보낸 줄 단위 JSON 이벤트를 수신
-  - DANGER 이벤트 시: 3차 관리기준을 초과하는 랜덤 계측값을 생성해 온사이트 API로 POST
-  - NORMAL 이벤트 시: (옵션) 평시 범위 값을 전송해 대시보드를 평시로 복귀
+  - ESP32가 보낸 줄 단위 JSON 이벤트를 수신 (STATE_CHANGED 등; event_to_action에서 매핑)
+  - DANGER(=기울어짐) 시: 3차 관리기준을 초과하는 랜덤 계측값을 생성해 온사이트 API로 POST
+  - NORMAL 시: (옵션) 평시 범위 값을 전송해 대시보드를 평시로 복귀
 
 사용:
   python bridge.py --config config.yaml
