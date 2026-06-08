@@ -97,6 +97,25 @@ def handle_event(cfg, event, dry_run):
         send_normal(cfg, dry_run)
 
 
+def event_to_action(msg):
+    """펌웨어가 보낸 JSON 메시지를 브리지 동작(DANGER/NORMAL)으로 변환.
+
+    지원하는 두 가지 펌웨어 형식:
+      - 구형(USB):  {"event": "DANGER"} / {"event": "NORMAL"}
+      - 신형(BT) :  {"event": "STATE_CHANGED", "state": "TILTED"|"NORMAL"|"UNKNOWN", ...}
+    해당 없으면(텔레메트리·BT_CONNECTED·UNKNOWN 등) None → 무시.
+    """
+    event = msg.get("event")
+    if event in ("DANGER", "NORMAL"):
+        return event
+    if event == "STATE_CHANGED":
+        if msg.get("state") == "TILTED":
+            return "DANGER"
+        if msg.get("state") == "NORMAL":
+            return "NORMAL"
+    return None
+
+
 def run_serial(cfg, dry_run):
     if serial is None:
         sys.exit("pyserial 미설치: pip install -r requirements.txt")
@@ -111,8 +130,9 @@ def run_serial(cfg, dry_run):
                 msg = json.loads(line)
             except json.JSONDecodeError:
                 continue  # 텔레메트리 깨짐/부분 수신 등은 무시
-            if msg.get("event") in ("DANGER", "NORMAL"):
-                handle_event(cfg, msg["event"], dry_run)
+            action = event_to_action(msg)
+            if action:
+                handle_event(cfg, action, dry_run)
 
 
 def run_simulate(cfg, dry_run):
