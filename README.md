@@ -12,7 +12,8 @@
 2. 진행자가 모형의 한쪽 벽을 기울인다(지중경사계가 변위된 상황 모사).
 3. MPU6050이 기울기를 감지, roll 임계 초과가 히스테리시스를 통과하면 ESP32가
    `STATE_CHANGED`(state=`TILTED`) 이벤트를 블루투스로 송신.
-4. 노트북의 브리지가 이를 받아 고정 예제 계측 데이터(`payload.json`, 3차 관리기준 초과)를 수집 API로 전송.
+4. 노트북의 브리지가 이를 받아 **3차 관리기준(누적 3mm) 초과 위험 프로파일**을 수집 API로 POST.
+   (대상 센서의 심도 그리드를 GET해 맞추고, 피크 변위만 범위 내 랜덤 스케일)
 5. 대시보드가 위험시로 전환. 벽을 다시 세우면 `NORMAL` 이벤트 수신(평시 복귀 데이터는 기본 미전송).
 
 ## 확정된 설계 결정
@@ -38,7 +39,7 @@
                           │  {"event":"STATE_CHANGED","state":"TILTED",...}
                           ▼
                   [노트북: bridge.py]   ← 블루투스 포트를 시리얼처럼 연다
-                          │  HTTP POST (고정 payload.json)
+                          │  HTTP POST (피크 랜덤 위험 프로파일, 3차 초과)
                           ▼
               [온사이트 계측 수집 API]   ← AWS에서 운영
                           │
@@ -54,12 +55,14 @@ esp32-inclinometer-demo/
 │   └── esp32_inclinometer/
 │       └── esp32_inclinometer.ino     # MPU6050 roll 감지 + 블루투스 + 부저/버튼/LED
 ├── bridge/
-│   ├── bridge.py                      # 블루투스(시리얼) 수신 → 온사이트 수집 API 호출
+│   ├── bridge.py                      # BT(시리얼) 수신 → 위험 프로파일 POST (랜덤 피크·자동GET·에러 견고)
+│   ├── payload.json                   # 기준 변위 프로파일(피크 스케일의 모양 / GET 폴백용)
+│   ├── get_example.py                 # 온사이트 API GET 디버그 예제(토큰은 placeholder)
 │   ├── config.example.yaml            # 설정 템플릿 (복사해서 config.yaml)
 │   └── requirements.txt
 └── docs/
     ├── wiring.md                      # 배선·핀맵·업로드·상태 판정 튜닝
-    └── api-contract.md                # ★ 온사이트 수집 API 명세 (채워야 함)
+    └── api-contract.md                # 온사이트 수집 API 명세 (확정)
 ```
 
 ## 신호 프로토콜 (블루투스 SPP, 줄단위 JSON)
@@ -138,16 +141,15 @@ python bridge.py --config config.yaml --check
 > `PEAK_DISPLACEMENT_MIN_MM` / `PEAK_DISPLACEMENT_MAX_MM` 상수로 조정한다. 기준 프로파일의
 > 심도 그리드/모양은 **대상 센서에서 자동 GET**해 맞춘다(데이터 없으면 `payload.json` 폴백).
 
-## 남은 작업 / 필요한 정보
-- [ ] **온사이트 수집 API 명세 확정** — `docs/api-contract.md`의 체크리스트.
-      (엔드포인트/인증/페이로드 스키마, 위험 판정이 서버측인지 우리가 level을 보내는지,
-      단일 포인트 vs 시계열, 평시 복귀 방법, 실제 1/2/3차 관리기준값)
-- [ ] 확정 후 `config.yaml` + `build_payload()` 정합.
-- [ ] 실 하드웨어로 roll 임계/장착 자세 튜닝, 모형에 MPU6050 견고 고정.
-- [ ] (선택) 위험 후 자동/수동 복귀 동선 결정, 리허설.
+## 상태 — 데모 검증 완료 ✅
+- [x] **펌웨어** — MPU6050 roll 감지 + BT(`STATE_CHANGED`) + 부저/버튼/상태 LED. 보드 플래시·동작 확인.
+- [x] **블루투스 연결** — macOS `blueutil` 절차로 `BT_CONNECTED`·`STATE_CHANGED` 수신 검증.
+- [x] **온사이트 API 연동** — 기울임 → 3차 초과 위험 프로파일 POST(200) → 대시보드 위험 전환 확인.
+      평시값(1mm 미만)도 POST로 복귀 가능.
+- [x] **브리지 견고화** — API 오류·BT 끊김에도 죽지 않고 재연결, `DANGER` 디바운스로 중복 POST 방지.
 
-## 마일스톤
-1. **HW 검증** — 배선 + 블루투스 연결 후 기울일 때 `STATE_CHANGED` 확인
-2. **API 연동** — 명세 받아 `--dry-run`으로 페이로드 맞춤 → 실전송
-3. **통합 리허설** — 벽 기울임→대시보드 위험 전환 end-to-end, 임계값 튜닝
-4. **현장 시연** — 복귀 동선 포함 최종 점검
+### 현장 적용 시 조정
+- 모형 장착 자세에 맞춰 `esp32_inclinometer.ino`의 roll 임계(`TILTED/NORMAL_ROLL_THRESHOLD`) 튜닝.
+- 위험 피크 범위(`bridge/bridge.py`의 `PEAK_DISPLACEMENT_MIN/MAX_MM`), 디바운스(`POST_MIN_INTERVAL_S`)는 데모 톤에 맞게.
+- `config.yaml`에 대상 환경의 호스트·센서ID·Bearer 토큰 입력(토큰은 커밋 금지).
+- 평시 복귀 동선(자동/수동) 결정.
