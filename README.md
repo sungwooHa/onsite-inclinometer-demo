@@ -100,23 +100,43 @@ ESP32는 줄 단위 JSON을 USB Serial과 블루투스로 동시에 출력한다
 - 노트북 BT 설정에서 `MIDAS_ONSITE_SENSOR` 페어링.
 - ★ 페어링만으로는 부족하다 — 노트북이 **나가는(outgoing) 포트**를 열어야 ESP32가
   연결로 인식(LED ON 고정)한다. 아래 `bridge.py`가 그 포트를 연다.
+- **macOS**: 시스템설정의 수동 "연결"은 SPP 채널이 안 열려 실패하기 쉽다. `blueutil`이 안정적이다:
+  ```bash
+  brew install blueutil
+  blueutil --paired                       # MIDAS_ONSITE_SENSOR 의 address 확인
+  ADDR=70:4B:CA:6F:5D:4A                   # ← 위에서 확인한 주소로 교체
+  blueutil --unpair $ADDR; blueutil --pair $ADDR; blueutil --connect $ADDR
+  ```
+  그 직후 `bridge.py`가 포트(`/dev/cu.MIDAS_ONSITE_SENSOR`)를 열게 한다.
+  끊겨서 재연결할 때도 unpair→pair→connect 전체를 다시 돌려야 안정적이다.
+  ⚠️ 보드 버튼은 누르지 말 것(짧게=BT 재시작 / 길게=페어링 삭제 → 연결 깨짐).
+- **Windows**: 장치관리자에서 "나가는(outgoing)" COM 포트를 확인해 `config.yaml`의 `serial.port`에 넣는다.
 
 ### 3) 브리지 실행
 ```bash
 cd bridge
 python3 -m venv .venv && source .venv/bin/activate   # (선택)
 pip install -r requirements.txt
-cp config.example.yaml config.yaml                   # serial.port=BT 포트, api 값 채우기
+cp config.example.yaml config.yaml   # serial.port(BT), api.url(센서ID), Bearer 토큰 채우기
 
-# API 없이 페이로드 형식만 확인
+# API 없이 페이로드 미리보기 (대상 센서 GET → 피크 랜덤 스케일)
 python bridge.py --config config.yaml --dry-run
 
 # 하드웨어 없이 키보드로 흐름 테스트 (d=위험, n=평시, q=종료)
 python bridge.py --config config.yaml --simulate --dry-run
 
-# 실전: 블루투스 연결 + 실제 API 전송
+# 블루투스 수신만 확인(POST 없음): 기울이면 STATE_CHANGED 가 찍힌다
+python bridge.py --config config.yaml --monitor
+
+# 실전: 블루투스 연결 + 기울이면 실제 API POST(위험 프로파일)
 python bridge.py --config config.yaml
+
+# 저장된 계측값 확인
+python bridge.py --config config.yaml --check
 ```
+> 위험 시 보내는 변위의 **피크 랜덤 범위**(항상 3차=3mm 초과)는 `bridge/bridge.py` 상단
+> `PEAK_DISPLACEMENT_MIN_MM` / `PEAK_DISPLACEMENT_MAX_MM` 상수로 조정한다. 기준 프로파일의
+> 심도 그리드/모양은 **대상 센서에서 자동 GET**해 맞춘다(데이터 없으면 `payload.json` 폴백).
 
 ## 남은 작업 / 필요한 정보
 - [ ] **온사이트 수집 API 명세 확정** — `docs/api-contract.md`의 체크리스트.

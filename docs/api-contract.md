@@ -33,10 +33,14 @@
 서버/대시보드가 관리기준과 비교해 위험을 띄운다.
 
 ## 4. 데이터 전송 방식 (이번 구현)
-- DANGER 수신 시 **고정 계측 데이터(`bridge/payload.json`)를 그대로 POST**한다.
-  - 이 데이터는 예제 `inclinometer_post.py` 의 `sensor_data` 와 동일(81점).
-  - `measurement_date` 만 전송 시각으로 갱신, 변위 값은 손대지 않는다.
-- 별도 데이터 합성·랜덤 생성·관리기준 비교는 하지 않는다(서버가 판정).
+- DANGER 수신 시 **위험 프로파일을 POST**한다. 기준 프로파일의 *모양*은 유지하고
+  **피크(최대 |변위|)만 랜덤 스케일**한다 → 매 전송마다 값이 조금씩 다르되 항상 3차(3mm) 초과.
+  - 기준 프로파일: **대상 센서의 최신 측정을 GET**해 그 심도 그리드/모양을 자동으로 쓴다
+    (`fetch_latest_profile`). 센서에 데이터가 없거나 GET 실패 시 번들 `bridge/payload.json`(81점)로 폴백.
+  - 랜덤 피크 범위는 `bridge/bridge.py` 상단 `PEAK_DISPLACEMENT_MIN_MM`/`MAX_MM` 상수(기본 3.5~6.0mm).
+  - `measurement_date` 는 전송 시각으로 갱신.
+- 위험 판정 위치는 여전히 서버측: 우리는 변위 프로파일만 보내고 서버/대시보드가
+  관리기준(누적 1/2/3mm)과 비교해 위험을 띄운다.
 
 ## 5. 검증 (GET)
 `python bridge.py --config config.yaml --check` → 현재 저장된 계측값을 조회해 출력

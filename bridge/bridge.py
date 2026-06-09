@@ -7,9 +7,9 @@
 
 동작:
   - ESP32가 보낸 줄 단위 JSON 이벤트를 수신 (STATE_CHANGED 등; event_to_action에서 매핑)
-  - DANGER(=기울어짐) 시: 고정 계측 데이터(payload.json)를 온사이트 API로 POST
-    → 대시보드가 3차 관리기준 초과(위험)로 전환
-  - 보낼 때 measurement_date 만 매번 현재 시각으로 갱신(항상 최신), sensor_data 값은 예제와 동일
+  - DANGER(=기울어짐) 시: 대상 센서의 최신 프로파일을 GET해 그 심도 그리드/모양을 쓰고,
+    피크 변위를 상수 범위(PEAK_DISPLACEMENT_MIN/MAX_MM)에서 랜덤 스케일해 POST
+    → 대시보드가 3차 관리기준 초과(위험)로 전환. GET 실패 시 번들 payload.json 사용.
   - NORMAL(=정상 복귀) 시: 평시 복귀 데이터 미설정 — 무시(필요 시 따로 추가)
 
 온사이트 API (docs/api-contract.md):
@@ -26,6 +26,7 @@
 import argparse
 import json
 import os
+import random
 import sys
 from datetime import datetime
 
@@ -39,6 +40,11 @@ except ImportError:
 
 PAYLOAD_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "payload.json")
 
+# === 위험(DANGER) 시 보낼 변위 프로파일의 피크(최대 |변위|) 랜덤 범위 (mm) ===
+# 관리기준 3차(누적 3mm)를 항상 초과하도록 하한을 3mm 위로 둔다. 데모 톤에 맞게 조정.
+PEAK_DISPLACEMENT_MIN_MM = 3.5
+PEAK_DISPLACEMENT_MAX_MM = 6.0
+
 
 def load_config(path):
     with open(path, "r", encoding="utf-8") as f:
@@ -50,14 +56,58 @@ def load_payload():
         return json.load(f)
 
 
-def post_danger(cfg, dry_run):
-    """고정 계측 데이터를 전송. measurement_date 만 매번 현재 시각으로 갱신(항상 최신)."""
+def fetch_latest_profile(cfg):
+    """대상 센서의 최신 측정 프로파일(심도-변위 배열)을 GET으로 가져온다.
+    실패하거나 데이터가 없으면 None → 호출부에서 번들 payload.json로 폴백."""
     api = cfg["api"]
-    payload = load_payload()
-    payload["measurement_date"] = datetime.now().replace(microsecond=0).isoformat()
-    n = len(payload.get("sensor_data", []))
+    try:
+        r = requests.get(api["url"], headers=api.get("headers", {}), timeout=5)
+        r.raise_for_status()
+        results = r.json().get("results", [])
+        if not results:
+            return None
+        data = results[0].get("data", [])
+        return [{"depth": p["depth"], "displacement": p["displacement"]} for p in data] or None
+    except Exception as e:
+        print(f"[WARN] 센서 프로파일 GET 실패({e}) → 번들 payload.json 사용")
+        return None
+
+
+def build_random_payload(cfg):
+    """기준 프로파일의 '모양'은 유지하고 피크 |변위|만 랜덤 스케일한 POST 페이로드를 만든다.
+
+    기준 프로파일: 대상 센서의 최신 측정(GET) → 심도 그리드/모양 자동 일치.
+                   GET 실패 시 번들 payload.json.
+    피크: 매 호출마다 [PEAK_DISPLACEMENT_MIN_MM, PEAK_DISPLACEMENT_MAX_MM]에서 랜덤.
+    """
+    base = fetch_latest_profile(cfg)
+    source = "GET(센서)"
+    if base is None:
+        base = load_payload().get("sensor_data", [])
+        source = "payload.json"
+    base_peak = max((abs(p["displacement"]) for p in base), default=0)
+    target_peak = random.uniform(PEAK_DISPLACEMENT_MIN_MM, PEAK_DISPLACEMENT_MAX_MM)
+    scale = (target_peak / base_peak) if base_peak else 1.0
+    sensor_data = [
+        {"depth": p["depth"], "displacement": round(p["displacement"] * scale, 2)}
+        for p in base
+    ]
+    payload = {
+        "measurement_date": datetime.now().replace(microsecond=0).isoformat(),
+        "unit": {"depth": "mm", "displacement": "mm"},
+        "sensor_data": sensor_data,
+    }
+    return payload, target_peak, source
+
+
+def post_danger(cfg, dry_run):
+    """기준 프로파일을 피크 랜덤 스케일해 전송. measurement_date 는 전송 시각."""
+    api = cfg["api"]
+    payload, peak, source = build_random_payload(cfg)
+    n = len(payload["sensor_data"])
     if dry_run:
-        print(f"[DRY-RUN] {api.get('method', 'POST')} {api['url']}  ({n}점, {payload['measurement_date']})")
+        print(f"[DRY-RUN] {api.get('method', 'POST')} {api['url']}  "
+              f"({n}점, 기준={source}, peak≈{peak:.2f}mm, {payload['measurement_date']})")
         print(f"          {json.dumps(payload, ensure_ascii=False)}")
         return
     r = requests.request(
@@ -67,7 +117,7 @@ def post_danger(cfg, dry_run):
         json=payload,
         timeout=5,
     )
-    print(f"[API] {r.status_code}  ({n}점, {payload['measurement_date']})")
+    print(f"[API] {r.status_code}  ({n}점, 기준={source}, peak≈{peak:.2f}mm, {payload['measurement_date']})")
     print(r.text)
     r.raise_for_status()
 
@@ -82,7 +132,7 @@ def check(cfg):
 
 def handle_event(cfg, event, dry_run):
     if event == "DANGER":
-        print(">> DANGER 수신 → 고정 계측 데이터 전송")
+        print(">> DANGER 수신 → 위험 프로파일 전송(피크 랜덤 스케일)")
         post_danger(cfg, dry_run)
     elif event == "NORMAL":
         # 평시 복귀 데이터는 미설정. 필요 시 정상 범위 payload 를 따로 전송하도록 추가.

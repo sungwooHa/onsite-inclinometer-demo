@@ -18,5 +18,6 @@ api:
     Authorization: "Bearer <YOUR_TOKEN>"
     Content-Type: "application/json"
 
-# DANGER 시 전송할 고정 계측 데이터는 bridge/payload.json 에 있습니다.
-# (예제 inclinometer_post.py 의 sensor_data 와 동일. measurement_date 만 전송 시각으로 갱신)
+# DANGER 시: 대상 센서의 최신 프로파일을 GET해 심도 그리드/모양을 자동으로 맞추고,
+# 피크 변위만 랜덤 스케일해서 POST한다(센서에 데이터가 없거나 GET 실패 시 bridge/payload.json 사용).
+# 랜덤 피크 범위(항상 3차=3mm 초과)는 bridge/bridge.py 상단 PEAK_DISPLACEMENT_MIN/MAX_MM 상수로 조정.
