@@ -1,44 +1,48 @@
-# 온사이트 수집 API 연동 명세 (채워야 할 부분)
+# 온사이트 계측 API 연동 명세 (확정)
 
-브리지(`bridge/bridge.py`)가 기울어짐 신호(블루투스 `STATE_CHANGED`/`TILTED`,
-또는 구형 `DANGER`)를 받으면 이 API로 "3차 초과 계측값"을 전송한다.
-**아래 정보가 확정되어야 브리지가 실제로 동작**한다. 확인되는 대로
-`bridge/config.yaml` 과 `build_payload()` 를 맞춘다.
+브리지(`bridge/bridge.py`)가 DANGER 신호를 받으면 이 API로 심도별 변위 프로파일을
+업로드한다. 아래는 실제 QA 예제 코드(`inclinometer_post.py` / `inclinometer_get.py`)에서
+확정한 명세다.
 
 ## 1. 엔드포인트
-- [ ] URL: `https://_______/api/_______`
-- [ ] HTTP 메서드: `POST` / `PUT` / 기타
-- [ ] 인증 방식: Bearer 토큰 / API Key 헤더 / 세션 쿠키 / 없음
-  - 헤더 이름·형식: `Authorization: Bearer ___` 등
+- URL: `https://api.onsite.kr-qa-midasit.com/inclinometer/sensor/{sensor_id}`
+  - 센서ID(`2100`)는 **URL 경로**에 들어간다(본문 아님).
+- 메서드: `POST` = 계측값 업로드, `GET` = 조회
+- 인증: `Authorization: Bearer <JWT>` (RS512, `sub=131` 계정)
+  - 토큰은 `bridge/config.yaml`(gitignore)에만 둔다. **절대 커밋 금지.**
 
-## 2. 페이로드 스키마
-- [ ] 본문 형식: JSON / form-data / 쿼리스트링
-- [ ] 필수 필드와 타입 (예시):
-  - 계측점 식별자 필드명: `sensor_id`? `point_id`? `tag`?
-  - 측정값 필드명/단위: `value`(mm)? `displacement`?
-  - 시각 필드명/형식: ISO8601? epoch ms? 서버가 자동 기록?
-  - 그 외 필수 필드(심도, 채널, 측정종류 등)
+## 2. POST 본문 스키마 (JSON)
+```json
+{
+  "measurement_date": "2025-04-05T00:00:00",
+  "unit": {"depth": "mm", "displacement": "mm"},
+  "sensor_data": [
+    {"depth": 0,     "displacement": -0.08},
+    {"depth": 500,   "displacement": 1.68},
+    {"depth": 40000, "displacement": 0}
+  ]
+}
+```
+- `measurement_date`: ISO8601, **타임존 표기 없음**(예제는 `...T00:00:00`).
+  브리지는 보낼 때 이 값만 현재 시각으로 갱신한다.
+- `sensor_data`: 심도(`depth`)–변위(`displacement`) 쌍의 배열.
+  예제는 심도 0~40000mm, 500mm 간격(81점).
 
-## 3. 평시 ↔ 위험 판정 위치 (중요)
-대시보드가 "위험"으로 바뀌는 트리거가 **어디서** 결정되는가?
-- [ ] (A) **서버가 관리기준과 비교**: 우리는 값(mm)만 보내고, 값이 3차 기준을
-      넘으면 서버/대시보드가 알아서 위험 처리 → 브리지는 `level3`보다 큰 값만 보내면 됨.
-- [ ] (B) **우리가 상태/레벨을 명시**: 페이로드에 `level`/`status`(예: 3 또는 "DANGER")를
-      함께 보내야 함 → 필드명·허용값 확인 필요.
+## 3. 위험 판정 위치 → (A) 서버측
+본문에 `level`/`status`/`danger` 필드가 **없다.** 우리는 변위 프로파일만 보내고,
+서버/대시보드가 관리기준과 비교해 위험을 띄운다.
 
-## 4. 데이터 형태
-- [ ] 단일 포인트 1건이면 충분한가, 아니면 **시계열 여러 점**을 넣어야
-      그래프가 기준선을 넘는 그림이 되는가? → `burst_count`로 조정.
-- [ ] 위험 후 **평시로 복귀**시키려면 정상 범위 값을 다시 보내면 되는가,
-      아니면 별도 reset/clear API가 있는가?
+## 4. 데이터 전송 방식 (이번 구현)
+- DANGER 수신 시 **고정 계측 데이터(`bridge/payload.json`)를 그대로 POST**한다.
+  - 이 데이터는 예제 `inclinometer_post.py` 의 `sensor_data` 와 동일(81점).
+  - `measurement_date` 만 전송 시각으로 갱신, 변위 값은 손대지 않는다.
+- 별도 데이터 합성·랜덤 생성·관리기준 비교는 하지 않는다(서버가 판정).
 
-## 5. 실제 관리기준값
-- [ ] 1차 / 2차 / 3차 누적변위 기준(mm) — 데모용 예시(10/20/30) 대신 실제 값.
-- [ ] "3차 초과"로 띄울 값의 현실적 범위 (`danger_max`).
+## 5. 검증 (GET)
+`python bridge.py --config config.yaml --check` → 현재 저장된 계측값을 조회해 출력
+(예제 `inclinometer_get.py` 와 동일 요청).
 
----
-
-### 확인 방법 제안
-- 온사이트 시스템의 API 문서 / 스웨거(Swagger) URL
-- 또는 브라우저 개발자도구 Network 탭에서 대시보드가 데이터를 받을 때의 요청 1건 캡처
-- 우선 `bridge.py --dry-run`(POST 없이 페이로드 출력)으로 형식을 맞춰본 뒤 실제 전송
+## 6. 확정된 운영 결정
+- **평시 복귀**: 브리지는 NORMAL 이벤트를 무시한다. 평시 복귀는 **프로젝트에서 자체 처리**.
+- **measurement_date**: 매 전송마다 **현재 시각**(`YYYY-MM-DDTHH:MM:SS`)으로 갱신 →
+  같은 날 반복 전송해도 항상 최신값이라 서버가 최신 위험으로 인식.

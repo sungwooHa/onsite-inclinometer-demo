@@ -1,0 +1,333 @@
+{
+  "measurement_date": "2025-04-05T00:00:00",
+  "unit": {
+    "depth": "mm",
+    "displacement": "mm"
+  },
+  "sensor_data": [
+    {
+      "depth": 0,
+      "displacement": -0.08
+    },
+    {
+      "depth": 500,
+      "displacement": 1.68
+    },
+    {
+      "depth": 1000,
+      "displacement": 2.94
+    },
+    {
+      "depth": 1500,
+      "displacement": 2.78
+    },
+    {
+      "depth": 2000,
+      "displacement": 2.48
+    },
+    {
+      "depth": 2500,
+      "displacement": 2.56
+    },
+    {
+      "depth": 3000,
+      "displacement": 2.22
+    },
+    {
+      "depth": 3500,
+      "displacement": 1.82
+    },
+    {
+      "depth": 4000,
+      "displacement": 0.78
+    },
+    {
+      "depth": 4500,
+      "displacement": -1
+    },
+    {
+      "depth": 5000,
+      "displacement": -2.3
+    },
+    {
+      "depth": 5500,
+      "displacement": -3.14
+    },
+    {
+      "depth": 6000,
+      "displacement": -3.96
+    },
+    {
+      "depth": 6500,
+      "displacement": -4.44
+    },
+    {
+      "depth": 7000,
+      "displacement": -4.68
+    },
+    {
+      "depth": 7500,
+      "displacement": -3.4
+    },
+    {
+      "depth": 8000,
+      "displacement": -3.24
+    },
+    {
+      "depth": 8500,
+      "displacement": -3.38
+    },
+    {
+      "depth": 9000,
+      "displacement": -3.6
+    },
+    {
+      "depth": 9500,
+      "displacement": -3.66
+    },
+    {
+      "depth": 10000,
+      "displacement": -3.56
+    },
+    {
+      "depth": 10500,
+      "displacement": -3.88
+    },
+    {
+      "depth": 11000,
+      "displacement": -4.24
+    },
+    {
+      "depth": 11500,
+      "displacement": -4.78
+    },
+    {
+      "depth": 12000,
+      "displacement": -4.86
+    },
+    {
+      "depth": 12500,
+      "displacement": -4.8
+    },
+    {
+      "depth": 13000,
+      "displacement": -4.7
+    },
+    {
+      "depth": 13500,
+      "displacement": -4.72
+    },
+    {
+      "depth": 14000,
+      "displacement": -4.7
+    },
+    {
+      "depth": 14500,
+      "displacement": -4.92
+    },
+    {
+      "depth": 15000,
+      "displacement": -5.1
+    },
+    {
+      "depth": 15500,
+      "displacement": -5.24
+    },
+    {
+      "depth": 16000,
+      "displacement": -5.4
+    },
+    {
+      "depth": 16500,
+      "displacement": -5.34
+    },
+    {
+      "depth": 17000,
+      "displacement": -5.38
+    },
+    {
+      "depth": 17500,
+      "displacement": -4.98
+    },
+    {
+      "depth": 18000,
+      "displacement": -4.76
+    },
+    {
+      "depth": 18500,
+      "displacement": -4.54
+    },
+    {
+      "depth": 19000,
+      "displacement": -4.14
+    },
+    {
+      "depth": 19500,
+      "displacement": -4.08
+    },
+    {
+      "depth": 20000,
+      "displacement": -4.02
+    },
+    {
+      "depth": 20500,
+      "displacement": -3.8
+    },
+    {
+      "depth": 21000,
+      "displacement": -3.52
+    },
+    {
+      "depth": 21500,
+      "displacement": -3.36
+    },
+    {
+      "depth": 22000,
+      "displacement": -3.26
+    },
+    {
+      "depth": 22500,
+      "displacement": -3.1
+    },
+    {
+      "depth": 23000,
+      "displacement": -2.96
+    },
+    {
+      "depth": 23500,
+      "displacement": -2.96
+    },
+    {
+      "depth": 24000,
+      "displacement": -2.9
+    },
+    {
+      "depth": 24500,
+      "displacement": -2.86
+    },
+    {
+      "depth": 25000,
+      "displacement": -2.7
+    },
+    {
+      "depth": 25500,
+      "displacement": -2.36
+    },
+    {
+      "depth": 26000,
+      "displacement": -1.88
+    },
+    {
+      "depth": 26500,
+      "displacement": -1.2
+    },
+    {
+      "depth": 27000,
+      "displacement": -0.6
+    },
+    {
+      "depth": 27500,
+      "displacement": -0.12
+    },
+    {
+      "depth": 28000,
+      "displacement": -0.16
+    },
+    {
+      "depth": 28500,
+      "displacement": -0.1
+    },
+    {
+      "depth": 29000,
+      "displacement": -0.06
+    },
+    {
+      "depth": 29500,
+      "displacement": 0.08
+    },
+    {
+      "depth": 30000,
+      "displacement": 0.26
+    },
+    {
+      "depth": 30500,
+      "displacement": 0.34
+    },
+    {
+      "depth": 31000,
+      "displacement": 0.44
+    },
+    {
+      "depth": 31500,
+      "displacement": 0.44
+    },
+    {
+      "depth": 32000,
+      "displacement": 0.48
+    },
+    {
+      "depth": 32500,
+      "displacement": 0.44
+    },
+    {
+      "depth": 33000,
+      "displacement": 0.5
+    },
+    {
+      "depth": 33500,
+      "displacement": 0.44
+    },
+    {
+      "depth": 34000,
+      "displacement": 0.18
+    },
+    {
+      "depth": 34500,
+      "displacement": 0.26
+    },
+    {
+      "depth": 35000,
+      "displacement": 0.36
+    },
+    {
+      "depth": 35500,
+      "displacement": 0.42
+    },
+    {
+      "depth": 36000,
+      "displacement": 0.5
+    },
+    {
+      "depth": 36500,
+      "displacement": 0.68
+    },
+    {
+      "depth": 37000,
+      "displacement": 0.5
+    },
+    {
+      "depth": 37500,
+      "displacement": 0.32
+    },
+    {
+      "depth": 38000,
+      "displacement": 0.14
+    },
+    {
+      "depth": 38500,
+      "displacement": 0
+    },
+    {
+      "depth": 39000,
+      "displacement": 0
+    },
+    {
+      "depth": 39500,
+      "displacement": 0
+    },
+    {
+      "depth": 40000,
+      "displacement": 0
+    }
+  ]
+}

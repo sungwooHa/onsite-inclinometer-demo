@@ -11,23 +11,12 @@ serial:
   baudrate: 115200
 
 api:
-  # === 온사이트 계측 API 명세에 맞춰 채우세요 (docs/api-contract.md) ===
-  url: "https://onsite.example.com/api/measurements"
+  # 온사이트 계측 API (docs/api-contract.md). URL 끝 숫자(2100)가 센서ID.
+  url: "https://api.onsite.kr-qa-midasit.com/inclinometer/sensor/2100"
   method: "POST"
   headers:
     Authorization: "Bearer <YOUR_TOKEN>"
     Content-Type: "application/json"
 
-measurement:
-  sensor_id: "INCL-01"      # 위험으로 띄울 계측점 ID
-  unit: "mm"
-
-  # 관리기준 — 지중경사계 누적변위 "예시값". 실제 현장 기준으로 교체하세요.
-  level1: 10                # 1차(주의)
-  level2: 20                # 2차(경계)
-  level3: 30                # 3차(위험/한계)
-  danger_max: 50            # 3차 초과 랜덤값의 상한
-
-  reset_on_normal: true     # NORMAL 이벤트 시 평시 값 전송 여부
-  burst_count: 1            # DANGER 시 주입할 데이터 포인트 수(>1 이면 짧은 시계열)
-  burst_interval_s: 0.5     # 버스트 간 간격(초)
+# DANGER 시 전송할 고정 계측 데이터는 bridge/payload.json 에 있습니다.
+# (예제 inclinometer_post.py 의 sensor_data 와 동일. measurement_date 만 전송 시각으로 갱신)
