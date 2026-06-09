@@ -8,5 +8,6 @@ The principles in [/CLAUDE.md](../CLAUDE.md) always take priority; everything he
 - [Onsite API integration spec](./api-contract.md) — open item
 - [Bridge: config](../bridge/config.example.yaml) · [usage](../bridge/bridge.py)
 - [Firmware](../firmware/esp32_inclinometer/)
+- [Specialist agents & routing](./agents.md) — 도메인별 담당 에이전트 (펌웨어 → firmware-engineer)
 
 <!-- Add future development docs below: coding conventions, deployment, contribution, etc. -->
