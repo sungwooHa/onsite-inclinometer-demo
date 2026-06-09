@@ -28,6 +28,7 @@ import json
 import os
 import random
 import sys
+import time
 from datetime import datetime
 
 import requests
@@ -44,6 +45,9 @@ PAYLOAD_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "payload
 # 관리기준 3차(누적 3mm)를 항상 초과하도록 하한을 3mm 위로 둔다. 데모 톤에 맞게 조정.
 PEAK_DISPLACEMENT_MIN_MM = 3.5
 PEAK_DISPLACEMENT_MAX_MM = 6.0
+
+# 같은 위험을 연속으로 쏘지 않도록 최소 간격(초). 채터링/같은-초 중복 POST(서버 500) 방지.
+POST_MIN_INTERVAL_S = 3.0
 
 
 def load_config(path):
@@ -110,16 +114,21 @@ def post_danger(cfg, dry_run):
               f"({n}점, 기준={source}, peak≈{peak:.2f}mm, {payload['measurement_date']})")
         print(f"          {json.dumps(payload, ensure_ascii=False)}")
         return
-    r = requests.request(
-        api.get("method", "POST"),
-        api["url"],
-        headers=api.get("headers", {}),
-        json=payload,
-        timeout=5,
-    )
-    print(f"[API] {r.status_code}  ({n}점, 기준={source}, peak≈{peak:.2f}mm, {payload['measurement_date']})")
-    print(r.text)
-    r.raise_for_status()
+    try:
+        r = requests.request(
+            api.get("method", "POST"),
+            api["url"],
+            headers=api.get("headers", {}),
+            json=payload,
+            timeout=5,
+        )
+    except Exception as e:
+        print(f"[API-ERR] 전송 실패: {e}  (브리지는 계속 동작)")
+        return
+    if r.ok:
+        print(f"[API] {r.status_code}  ({n}점, 기준={source}, peak≈{peak:.2f}mm, {payload['measurement_date']})")
+    else:
+        print(f"[API-ERR] {r.status_code}  {r.text[:160]}  (브리지는 계속 동작)")
 
 
 def check(cfg):
@@ -162,19 +171,33 @@ def run_serial(cfg, dry_run):
     if serial is None:
         sys.exit("pyserial 미설치: pip install -r requirements.txt")
     sc = cfg["serial"]
-    print(f"시리얼 연결: {sc['port']} @ {sc['baudrate']}  (Ctrl+C 종료)")
-    with serial.Serial(sc["port"], int(sc["baudrate"]), timeout=1) as ser:
-        while True:
-            line = ser.readline().decode("utf-8", "ignore").strip()
-            if not line:
-                continue
-            try:
-                msg = json.loads(line)
-            except json.JSONDecodeError:
-                continue  # 텔레메트리 깨짐/부분 수신 등은 무시
-            action = event_to_action(msg)
-            if action:
-                handle_event(cfg, action, dry_run)
+    last_danger = 0.0
+    while True:  # 시리얼/BT가 끊겨도 죽지 않고 재연결 시도(데모 중 끊김 방어)
+        try:
+            with serial.Serial(sc["port"], int(sc["baudrate"]), timeout=1) as ser:
+                print(f"시리얼 연결: {sc['port']} @ {sc['baudrate']}  (Ctrl+C 종료)")
+                while True:
+                    line = ser.readline().decode("utf-8", "ignore").strip()
+                    if not line:
+                        continue
+                    try:
+                        msg = json.loads(line)
+                    except json.JSONDecodeError:
+                        continue  # 텔레메트리 깨짐/부분 수신 등은 무시
+                    action = event_to_action(msg)
+                    if action == "DANGER":
+                        now = time.monotonic()
+                        if now - last_danger < POST_MIN_INTERVAL_S:
+                            continue  # 디바운스: 짧은 시간 내 중복 DANGER 무시
+                        last_danger = now
+                        handle_event(cfg, "DANGER", dry_run)
+                    elif action == "NORMAL":
+                        handle_event(cfg, "NORMAL", dry_run)
+        except KeyboardInterrupt:
+            raise
+        except Exception as e:
+            print(f"[SERIAL] 연결 끊김/오류: {e} → 3초 후 재연결 시도")
+            time.sleep(3)
 
 
 def run_monitor(cfg):
