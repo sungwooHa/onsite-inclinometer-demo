@@ -111,7 +111,9 @@ ESP32는 줄 단위 JSON을 USB Serial과 블루투스로 동시에 출력한다
   blueutil --unpair $ADDR; blueutil --pair $ADDR; blueutil --connect $ADDR
   ```
   그 직후 `bridge.py`가 포트(`/dev/cu.MIDAS_ONSITE_SENSOR`)를 열게 한다.
-  끊겨서 재연결할 때도 unpair→pair→connect 전체를 다시 돌려야 안정적이다.
+  끊기거나 전원을 껐다 켜면 `bridge.py`가 자동 복구한다 — `config.yaml`의 `serial.bt_address`(ESP32 MAC)를
+  넣으면 포트를 열기 전 `blueutil --connect`를 실행한다(무인 재연결). connect 로도 안 붙는 깊은 페어링
+  깨짐일 때만 위 unpair→pair→connect 를 수동으로 다시 돌린다.
   ⚠️ 보드 버튼은 누르지 말 것(짧게=BT 재시작 / 길게=페어링 삭제 → 연결 깨짐).
 - **Windows**: 장치관리자에서 "나가는(outgoing)" COM 포트를 확인해 `config.yaml`의 `serial.port`에 넣는다.
 
@@ -120,7 +122,7 @@ ESP32는 줄 단위 JSON을 USB Serial과 블루투스로 동시에 출력한다
 cd bridge
 python3 -m venv .venv && source .venv/bin/activate   # (선택)
 pip install -r requirements.txt
-cp config.example.yaml config.yaml   # serial.port(BT), api.url(센서ID), Bearer 토큰 채우기
+cp config.example.yaml config.yaml   # serial.port(BT)·bt_address(MAC), api.url(센서ID), Bearer 토큰 채우기
 
 # API 없이 페이로드 미리보기 (대상 센서 GET → 피크 랜덤 스케일)
 python bridge.py --config config.yaml --dry-run
@@ -146,7 +148,7 @@ python bridge.py --config config.yaml --check
 - [x] **블루투스 연결** — macOS `blueutil` 절차로 `BT_CONNECTED`·`STATE_CHANGED` 수신 검증.
 - [x] **온사이트 API 연동** — 기울임 → 3차 초과 위험 프로파일 POST(200) → 대시보드 위험 전환 확인.
       평시값(1mm 미만)도 POST로 복귀 가능.
-- [x] **브리지 견고화** — API 오류·BT 끊김에도 죽지 않고 재연결, `DANGER` 디바운스로 중복 POST 방지.
+- [x] **브리지 견고화** — API 오류·BT 끊김에도 죽지 않고 재연결(끊기면 `blueutil --connect`로 무인 복구 — `config.yaml`의 `bt_address`), `DANGER` 디바운스로 중복 POST 방지.
 
 ### 현장 적용 시 조정
 - 모형 장착 자세에 맞춰 `esp32_inclinometer.ino`의 roll 임계(`TILTED/NORMAL_ROLL_THRESHOLD`) 튜닝.
