@@ -54,13 +54,17 @@ const float MOVING_GYRO_THRESHOLD = 5.0;
 
 // =========================
 // Buzzer Pattern
-// 기울어짐 상태일 때 삐-익 / 삐-익 장음 경고
+// 기울어짐 상태로 전이될 때 삐-익 / 삐-익 장음 경고를 MAX_BEEPS 번만 울린다.
+// 속도(ON/OFF 길이)는 그대로, 횟수만 제한한다.
+// 5번 다 울린 뒤에는 정상으로 복귀했다가 다시 기울어져야 또 울린다.
 // =========================
 const unsigned long BEEP_ON_MS  = 1200;
 const unsigned long BEEP_OFF_MS = 800;
+const int MAX_BEEPS = 5;
 
 bool buzzerOn = false;
 unsigned long lastBeepChangeTime = 0;
+int beepCount = 0;
 
 // =========================
 // Status LED Blink
@@ -419,10 +423,20 @@ void updateBuzzerPattern() {
   unsigned long now = millis();
 
   if (currentState == "기울어짐") {
+    // 이미 5번 다 울렸으면 더 울리지 않고 조용히 대기
+    if (beepCount >= MAX_BEEPS) {
+      if (buzzerOn) {
+        buzzerOn = false;
+        digitalWrite(BUZZER_PIN, LOW);
+      }
+      return;
+    }
+
     if (buzzerOn && now - lastBeepChangeTime >= BEEP_ON_MS) {
       buzzerOn = false;
       digitalWrite(BUZZER_PIN, LOW);
       lastBeepChangeTime = now;
+      beepCount++;  // 삐- 한 번이 끝남
     } else if (!buzzerOn && now - lastBeepChangeTime >= BEEP_OFF_MS) {
       buzzerOn = true;
       digitalWrite(BUZZER_PIN, HIGH);
@@ -431,6 +445,7 @@ void updateBuzzerPattern() {
   } else {
     buzzerOn = false;
     digitalWrite(BUZZER_PIN, LOW);
+    beepCount = 0;  // 정상 복귀 시 리셋 → 다음 기울어짐에 다시 5번
   }
 }
 
@@ -603,7 +618,7 @@ void setup() {
   Serial.println("[SYSTEM] Tilted: long buzzer only, LED remains Bluetooth status");
   Serial.println("[SYSTEM] Tilt threshold: roll < -100.0");
   Serial.println("[SYSTEM] Normal threshold: roll > -97.0");
-  Serial.println("[SYSTEM] Buzzer: 1200ms ON / 800ms OFF");
+  Serial.println("[SYSTEM] Buzzer: 1200ms ON / 800ms OFF, 5 beeps per tilt");
   Serial.println("[SYSTEM] Short button press: restart Bluetooth, LED fast blink 3 times");
   Serial.println("[SYSTEM] Long button press 2s: clear Bluetooth pairing, LED fast blink 8 times");
   Serial.println();
