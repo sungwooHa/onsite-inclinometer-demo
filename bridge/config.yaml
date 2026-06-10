@@ -7,6 +7,8 @@ serial:
   # macOS:   ls /dev/cu.*   블루투스 예) /dev/cu.MIDAS_ONSITE_SENSOR  / USB 직결 예) /dev/cu.usbserial-0001
   # Windows: 장치관리자 COM 포트.  블루투스는 반드시 "나가는(outgoing)" COM 을 써야 함(예: COM5).
   #          페어링만 하고 outgoing COM 을 안 열면 ESP32 연결로 인식 못 해 LED 가 계속 깜빡인다.
+  # port 는 '접두사'로 해석된다 — macOS가 연결마다 끝에 -1/-2 접미사를 붙여도
+  #   브리지가 매칭되는 실제 노드를 자동으로 골라 연다(정전/재페어 후에도 그대로 동작).
   port: "/dev/cu.MIDAS_ONSITE_SENSOR"
   baudrate: 115200
   # (선택) BT 자동 재연결용 ESP32 MAC. 설정하면 끊겼을 때 브리지가 포트를 열기 전에

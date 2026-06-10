@@ -17,18 +17,22 @@ set -uo pipefail
 cd "$(dirname "$0")"
 
 ADDR="${BT_ADDR:-70:4B:CA:6F:5D:4A}"            # ESP32 MAC (config.yaml 의 serial.bt_address 와 동일)
-PORT="${BT_PORT:-/dev/cu.MIDAS_ONSITE_SENSOR}"  # macOS BT 시리얼 포트 노드 (config.yaml 의 serial.port 와 동일)
+PORT="${BT_PORT:-/dev/cu.MIDAS_ONSITE_SENSOR}"  # macOS BT 시리얼 포트 '접두사' (config.yaml 의 serial.port 와 동일)
 PY="${PYTHON:-.venv/bin/python}"
 [ -x "$PY" ] || PY="python3"                    # venv 없으면 시스템 python 으로 폴백
 
-# 포트 노드($PORT)가 생길 때까지 최대 $1초 대기(0.5초 간격). 생기면 0.
+# 현재 매칭되는 포트 노드 1개를 출력(없으면 빈 문자열). 가장 최근 생성 노드 우선.
+# macOS 가 연결마다 끝에 -1/-2 접미사를 붙일 수 있어 정확한 이름이 아니라 접두사로 찾는다.
+first_node() { ls -t "$PORT"* 2>/dev/null | head -1; }
+
+# 매칭 포트 노드가 생길 때까지 최대 $1초 대기(0.5초 간격). 생기면 0.
 wait_port() {
   local steps=$(( $1 * 2 )) i=0
   while [ "$i" -lt "$steps" ]; do
-    [ -e "$PORT" ] && return 0
+    [ -n "$(first_node)" ] && return 0
     sleep 0.5; i=$((i + 1))
   done
-  [ -e "$PORT" ]
+  [ -n "$(first_node)" ]
 }
 
 if command -v blueutil >/dev/null 2>&1; then
@@ -37,7 +41,7 @@ if command -v blueutil >/dev/null 2>&1; then
   blueutil --pair    "$ADDR" 2>/dev/null || true   # 0x02(No Connection)로 실패해도 무시 — connect 가 살린다
   blueutil --connect "$ADDR" 2>/dev/null || true
   if wait_port 10; then
-    echo "[BT] 포트 노드 확인 ($PORT) — 브리지 실행"
+    echo "[BT] 포트 노드 확인 ($(first_node)) — 브리지 실행"
   else
     echo "[BT] 포트 노드 미확인(10s) — 브리지 retry/자동 재연결에 맡기고 진행"
   fi

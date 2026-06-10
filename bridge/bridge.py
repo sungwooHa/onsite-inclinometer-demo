@@ -24,6 +24,7 @@
   python bridge.py --config config.yaml --check       # GET 으로 현재 계측값 조회 후 종료
 """
 import argparse
+import glob
 import json
 import os
 import random
@@ -218,6 +219,33 @@ def bt_reconnect(sc):
               f"계속 안 붙으면 수동 복구: blueutil --unpair {addr} && blueutil --pair {addr}")
 
 
+def resolve_port(sc):
+    """설정된 port 를 '접두사'로 보고 실제 존재하는 시리얼 노드로 해석한다.
+
+    macOS 블루투스는 BT 이름(MIDAS_ONSITE_SENSOR)이 그대로여도 연결마다 노드 끝에
+    -1/-2 같은 접미사를 붙일 수 있다 — 직전 노드가 아직 안 풀린 채(브리지를 켠 채
+    센서 전원이 빠지거나 unpair/pair churn) 새로 연결되면 이름 충돌을 피하느라 그렇다.
+    그래서 정확한 경로를 하드코딩하면 정전/재페어 뒤 'No such file'로 못 붙는다.
+
+      - port 에 '*' 가 있으면 그대로 glob.
+      - 정확히 존재하면 그대로 사용(정상 상황).
+      - 없으면 port + '*' 로 glob 해 매칭 노드를 쓴다(접미사 흡수). 여러 개면
+        가장 최근 생성된 노드(=현재 연결)를 골라 옛 유령 노드를 피한다.
+    매칭이 없으면 원래 값을 그대로 돌려준다(열기 실패 메시지는 동일).
+    """
+    port = sc["port"]
+    if "*" in port:
+        matches = glob.glob(port)
+    elif os.path.exists(port):
+        return port
+    else:
+        matches = glob.glob(port + "*")
+    if not matches:
+        return port
+    matches.sort(key=lambda p: os.stat(p).st_mtime, reverse=True)
+    return matches[0]
+
+
 def run_serial(cfg, dry_run):
     if serial is None:
         sys.exit("pyserial 미설치: pip install -r requirements.txt")
@@ -226,9 +254,10 @@ def run_serial(cfg, dry_run):
     armed = True  # 엣지 트리거: NORMAL을 본 뒤에만 다음 DANGER를 1회 POST. 초기엔 무장.
     while True:  # 시리얼/BT가 끊겨도 죽지 않고 재연결 시도(데모 중 끊김 방어)
         bt_reconnect(sc)  # (macOS) 포트 열기 전 BT 링크부터 살린다(blueutil --connect)
+        port = resolve_port(sc)  # 연결마다 접미사(-1/-2)가 바뀔 수 있어 매번 자동탐지
         try:
-            with serial.Serial(sc["port"], int(sc["baudrate"]), timeout=1) as ser:
-                print(f"시리얼 연결: {sc['port']} @ {sc['baudrate']}  (Ctrl+C 종료)")
+            with serial.Serial(port, int(sc["baudrate"]), timeout=1) as ser:
+                print(f"시리얼 연결: {port} @ {sc['baudrate']}  (Ctrl+C 종료)")
                 while True:
                     line = ser.readline().decode("utf-8", "ignore").strip()
                     if not line:
@@ -266,10 +295,11 @@ def run_monitor(cfg):
     if serial is None:
         sys.exit("pyserial 미설치: pip install -r requirements.txt")
     sc = cfg["serial"]
-    print(f"[MONITOR] 시리얼 연결: {sc['port']} @ {sc['baudrate']}  (Ctrl+C 종료)")
     print("[MONITOR] 수신되는 모든 줄을 출력합니다. POST는 하지 않습니다.")
     bt_reconnect(sc)  # (macOS) BT 링크부터 살리고 포트를 연다
-    with serial.Serial(sc["port"], int(sc["baudrate"]), timeout=1) as ser:
+    port = resolve_port(sc)  # 연결마다 접미사(-1/-2)가 바뀔 수 있어 자동탐지
+    print(f"[MONITOR] 시리얼 연결: {port} @ {sc['baudrate']}  (Ctrl+C 종료)")
+    with serial.Serial(port, int(sc["baudrate"]), timeout=1) as ser:
         while True:
             line = ser.readline().decode("utf-8", "ignore").strip()
             if not line:
