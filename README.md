@@ -57,6 +57,7 @@ esp32-inclinometer-demo/
 ├── bridge/
 │   ├── bridge.py                      # BT(시리얼) 수신 → 위험 프로파일 POST (랜덤 피크·자동GET·에러 견고)
 │   ├── connect_and_run.sh             # BT 풀 사이클 복구 + 브리지 실행 한 번에(껐다 켤 때마다 안전)
+│   ├── RUNBOOK.md                     # 현장 운영자용 가이드(시작·복구 단계·금지사항)
 │   ├── payload.json                   # 기준 변위 프로파일(피크 스케일의 모양 / GET 폴백용)
 │   ├── get_example.py                 # 온사이트 API GET 디버그 예제(토큰은 placeholder)
 │   ├── config.example.yaml            # 설정 템플릿
@@ -140,6 +141,8 @@ pip install -r requirements.txt
 ./connect_and_run.sh            # 실전(실제 POST)
 ./connect_and_run.sh --monitor  # 블루투스 수신만(POST 없음)
 ./connect_and_run.sh --dry-run  # POST 없이 페이로드만
+# 스크립트는 unpair 후 /dev/cu 포트 노드가 생길 때까지 기다린 뒤 연다("No such file" 크래시 방지).
+# 안 붙거나 데이터가 안 오면 같은 명령 재실행 — 단계별 복구·금지사항은 bridge/RUNBOOK.md 참고.
 
 # ── 또는 수동으로 직접(브리지를 껐다 켤 땐 위 풀 사이클을 먼저 돌릴 것) ──
 python bridge.py --config config.yaml --dry-run            # API 없이 페이로드 미리보기
