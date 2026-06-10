@@ -31,7 +31,7 @@ import shutil
 import subprocess
 import sys
 import time
-from datetime import datetime
+from datetime import datetime, timedelta
 
 import requests
 import yaml
@@ -63,20 +63,35 @@ def load_payload():
 
 
 def fetch_latest_profile(cfg):
-    """대상 센서의 최신 측정 프로파일(심도-변위 배열)을 GET으로 가져온다.
-    실패하거나 데이터가 없으면 None → 호출부에서 번들 payload.json로 폴백."""
+    """대상 센서의 최신 측정(심도-변위 배열, measurementTime)을 GET으로 가져온다.
+    실패하거나 데이터가 없으면 (None, None) → 호출부에서 번들 payload.json·현재시각으로 폴백."""
     api = cfg["api"]
     try:
         r = requests.get(api["url"], headers=api.get("headers", {}), timeout=5)
         r.raise_for_status()
         results = r.json().get("results", [])
         if not results:
-            return None
-        data = results[0].get("data", [])
-        return [{"depth": p["depth"], "displacement": p["displacement"]} for p in data] or None
+            return None, None
+        latest = results[0]
+        data = latest.get("data", [])
+        profile = [{"depth": p["depth"], "displacement": p["displacement"]} for p in data] or None
+        return profile, latest.get("measurementTime")
     except Exception as e:
         print(f"[WARN] 센서 프로파일 GET 실패({e}) → 번들 payload.json 사용")
-        return None
+        return None, None
+
+
+def next_measurement_date(latest_time):
+    """기존 최신 측정보다 확실히 나중인 measurement_date(현재 시각 이상)를 만든다.
+    이 API 는 measurement_date 가 최신보다 이르면 500 을 내므로 그 위로 맞춘다."""
+    now = datetime.now().replace(microsecond=0)
+    if latest_time:
+        try:
+            latest = datetime.strptime(latest_time, "%Y-%m-%dT%H:%M:%S")
+            return max(now, latest + timedelta(seconds=1)).isoformat()
+        except ValueError:
+            pass
+    return now.isoformat()
 
 
 def build_random_payload(cfg):
@@ -86,7 +101,7 @@ def build_random_payload(cfg):
                    GET 실패 시 번들 payload.json.
     피크: 매 호출마다 [PEAK_DISPLACEMENT_MIN_MM, PEAK_DISPLACEMENT_MAX_MM]에서 랜덤.
     """
-    base = fetch_latest_profile(cfg)
+    base, latest_time = fetch_latest_profile(cfg)
     source = "GET(센서)"
     if base is None:
         base = load_payload().get("sensor_data", [])
@@ -99,7 +114,7 @@ def build_random_payload(cfg):
         for p in base
     ]
     payload = {
-        "measurement_date": datetime.now().replace(microsecond=0).isoformat(),
+        "measurement_date": next_measurement_date(latest_time),
         "unit": {"depth": "mm", "displacement": "mm"},
         "sensor_data": sensor_data,
     }
