@@ -9,6 +9,12 @@ serial:
   #          페어링만 하고 outgoing COM 을 안 열면 ESP32 연결로 인식 못 해 LED 가 계속 깜빡인다.
   port: "/dev/cu.MIDAS_ONSITE_SENSOR"
   baudrate: 115200
+  # (선택) BT 자동 재연결용 ESP32 MAC. 설정하면 끊겼을 때 브리지가 포트를 열기 전에
+  #   `blueutil --connect <MAC>` 로 링크부터 되살린다 → 전원 껐다 켜도 무인 자동 복구.
+  #   값이 없거나 USB 직결이면 자동 재연결을 건너뛴다. blueutil 필요: brew install blueutil
+  #   MAC 확인: blueutil --paired  (예: 70:4B:CA:6F:5D:4A)
+  #   connect 로도 안 붙는 깊은 복구(페어링 어긋남)는 수동: blueutil --unpair <MAC> && --pair <MAC>
+  # bt_address: "70:4B:CA:6F:5D:4A"
 
 api:
   # 온사이트 계측 API (docs/api-contract.md). URL 끝 숫자(2100)가 센서ID.

@@ -27,6 +27,8 @@ import argparse
 import json
 import os
 import random
+import shutil
+import subprocess
 import sys
 import time
 from datetime import datetime
@@ -167,12 +169,47 @@ def event_to_action(msg):
     return None
 
 
+BT_SETTLE_S = 1.5  # blueutil --connect 성공 후 SPP가 붙을 시간(이후 포트 open)
+
+
+def bt_reconnect(sc):
+    """(macOS) 포트를 열기 전에 끊긴 BT SPP 링크를 blueutil --connect 로 되살린다(best-effort).
+
+    serial.bt_address(MAC)가 설정돼 있고 blueutil 이 설치된 경우에만 동작.
+    USB 직결(주소 없음)이거나 blueutil 이 없으면 조용히 건너뛴다.
+    connect 가 실패해도 예외를 던지지 않는다 — 포트 열기를 그대로 시도하고, 안 되면
+    바깥 루프가 3초 뒤 다시 부른다. 페어링 자체가 어긋난 깊은 복구는 수동(아래 안내).
+    """
+    addr = sc.get("bt_address")
+    if not addr:
+        return
+    if shutil.which("blueutil") is None:
+        print("[BT] blueutil 미설치 — 자동 재연결 건너뜀(brew install blueutil). 포트 열기만 시도.")
+        return
+    try:
+        r = subprocess.run(
+            ["blueutil", "--connect", addr],
+            capture_output=True, text=True, timeout=15,
+        )
+    except Exception as e:
+        print(f"[BT] blueutil 호출 오류: {e} → 포트 열기 시도")
+        return
+    if r.returncode == 0:
+        print(f"[BT] blueutil --connect {addr} OK → {BT_SETTLE_S}s 후 포트 열기")
+        time.sleep(BT_SETTLE_S)
+    else:
+        msg = (r.stderr or r.stdout).strip()
+        print(f"[BT] blueutil --connect 실패: {msg} → 포트 열기 시도. "
+              f"계속 안 붙으면 수동 복구: blueutil --unpair {addr} && blueutil --pair {addr}")
+
+
 def run_serial(cfg, dry_run):
     if serial is None:
         sys.exit("pyserial 미설치: pip install -r requirements.txt")
     sc = cfg["serial"]
     last_danger = 0.0
     while True:  # 시리얼/BT가 끊겨도 죽지 않고 재연결 시도(데모 중 끊김 방어)
+        bt_reconnect(sc)  # (macOS) 포트 열기 전 BT 링크부터 살린다(blueutil --connect)
         try:
             with serial.Serial(sc["port"], int(sc["baudrate"]), timeout=1) as ser:
                 print(f"시리얼 연결: {sc['port']} @ {sc['baudrate']}  (Ctrl+C 종료)")
@@ -211,6 +248,7 @@ def run_monitor(cfg):
     sc = cfg["serial"]
     print(f"[MONITOR] 시리얼 연결: {sc['port']} @ {sc['baudrate']}  (Ctrl+C 종료)")
     print("[MONITOR] 수신되는 모든 줄을 출력합니다. POST는 하지 않습니다.")
+    bt_reconnect(sc)  # (macOS) BT 링크부터 살리고 포트를 연다
     with serial.Serial(sc["port"], int(sc["baudrate"]), timeout=1) as ser:
         while True:
             line = ser.readline().decode("utf-8", "ignore").strip()
