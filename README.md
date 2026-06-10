@@ -56,9 +56,11 @@ esp32-inclinometer-demo/
 │       └── esp32_inclinometer.ino     # MPU6050 roll 감지 + 블루투스 + 부저/버튼/LED
 ├── bridge/
 │   ├── bridge.py                      # BT(시리얼) 수신 → 위험 프로파일 POST (랜덤 피크·자동GET·에러 견고)
+│   ├── connect_and_run.sh             # BT 풀 사이클 복구 + 브리지 실행 한 번에(껐다 켤 때마다 안전)
 │   ├── payload.json                   # 기준 변위 프로파일(피크 스케일의 모양 / GET 폴백용)
 │   ├── get_example.py                 # 온사이트 API GET 디버그 예제(토큰은 placeholder)
-│   ├── config.example.yaml            # 설정 템플릿 (복사해서 config.yaml)
+│   ├── config.example.yaml            # 설정 템플릿
+│   ├── config.yaml                    # 실제 설정(센서ID·bt_address·토큰) — 추적됨, push 주의
 │   └── requirements.txt
 └── docs/
     ├── wiring.md                      # 배선·핀맵·업로드·상태 판정 튜닝
@@ -70,7 +72,7 @@ ESP32는 줄 단위 JSON을 USB Serial과 블루투스로 동시에 출력한다
 
 | 종류 | 예시 | 브리지 처리 |
 |------|------|------|
-| 상태 변경 | `{"event":"STATE_CHANGED","state":"TILTED",...}` | 위험 주입 |
+| 상태 변경 | `{"event":"STATE_CHANGED","state":"TILTED",...}` | 위험 주입(엣지 트리거: 정상→기울어짐 전이 1회만) |
 | 상태 변경 | `{"event":"STATE_CHANGED","state":"NORMAL",...}` | 평시 복귀 |
 | 연결 알림 | `{"event":"BT_CONNECTED","deviceId":"..."}` | 무시 |
 | BT 제어 | `{"event":"BT_RESTART_REQUESTED"}` / `BT_PAIRING_RESET_REQUESTED` | 무시 |
@@ -81,8 +83,11 @@ ESP32는 줄 단위 JSON을 USB Serial과 블루투스로 동시에 출력한다
 > 브리지는 구형 `{"event":"DANGER"}` / `{"event":"NORMAL"}` 형식도 하위호환으로 받는다
 > (`bridge.py`의 `event_to_action()`).
 
-상태 전환은 히스테리시스로 안정화: `roll`이 `TILTED_ROLL_THRESHOLD`(-100°) 미만이면
-기울어짐, `NORMAL_ROLL_THRESHOLD`(-97°) 초과면 정상, 그 사이는 직전 상태 유지.
+상태 전환은 **히스테리시스 + dwell(유지시간)**로 이중 안정화한다. `roll`이
+`TILTED_ROLL_THRESHOLD`(-100°) 미만이면 기울어짐 후보, `NORMAL_ROLL_THRESHOLD`(-97°)
+초과면 정상 후보, 그 사이는 직전 상태 유지(히스테리시스). 그리고 후보 상태가
+`STATE_DWELL_MS`(**1초**) 이상 연속 유지돼야 전이를 확정해 `STATE_CHANGED`를 보낸다 —
+1초 미만의 손떨림은 무시되어 이벤트가 폭주하지 않는다(경계에서 NORMAL↔TILTED 채터링 방지).
 임계는 **장착 자세에 따라 달라진다**(현재 장착 기준 정상 roll ≈ -93, 기울어짐 ≈ -113).
 펌웨어 상단 상수로 조정.
 
@@ -110,34 +115,38 @@ ESP32는 줄 단위 JSON을 USB Serial과 블루투스로 동시에 출력한다
   ADDR=70:4B:CA:6F:5D:4A                   # ← 위에서 확인한 주소로 교체
   blueutil --unpair $ADDR; blueutil --pair $ADDR; blueutil --connect $ADDR
   ```
-  그 직후 `bridge.py`가 포트(`/dev/cu.MIDAS_ONSITE_SENSOR`)를 열게 한다.
-  끊기거나 전원을 껐다 켜면 `bridge.py`가 자동 복구한다 — `config.yaml`의 `serial.bt_address`(ESP32 MAC)를
-  넣으면 포트를 열기 전 `blueutil --connect`를 실행한다(무인 재연결). connect 로도 안 붙는 깊은 페어링
-  깨짐일 때만 위 unpair→pair→connect 를 수동으로 다시 돌린다.
-  ⚠️ 보드 버튼은 누르지 말 것(짧게=BT 재시작 / 길게=페어링 삭제 → 연결 깨짐).
+  그 **직후** `bridge.py`가 포트(`/dev/cu.MIDAS_ONSITE_SENSOR`)를 열게 한다(갓 pair한 직후 open이 핵심).
+  - `pair`가 `0x02 (No Connection)`로 실패해도 무시 — 곧이은 `connect`/브리지가 SPP를 살린다.
+  - ⚠️ **브리지를 껐다 켤 때마다**(예: `--monitor`↔`--dry-run` 전환) SPP가 깨진다. 이때
+    `blueutil --connect`(브리지 자동 재연결)만으로는 ACL은 붙어도 SPP가 안 붙어 포트는
+    열려 "시리얼 연결:"까지만 찍히고 데이터가 조용히 안 온다. **매번 위 unpair→pair→connect
+    풀 사이클을 다시 돌린 직후** 브리지를 열어야 안정적이다 → 이 절차를 한 번에 묶은
+    **`bridge/connect_and_run.sh`** 를 쓰면 편하다(아래 3) 참고).
+  - `config.yaml`의 `serial.bt_address`(ESP32 MAC)가 있으면 브리지가 포트 열기 전
+    `blueutil --connect`로 무인 복구를 시도한다(전원만 껐다 켠 정도는 자동 회복).
+  - ⚠️ 보드 버튼은 누르지 말 것(짧게=BT 재시작 / 길게=페어링 삭제 → 연결 깨짐).
 - **Windows**: 장치관리자에서 "나가는(outgoing)" COM 포트를 확인해 `config.yaml`의 `serial.port`에 넣는다.
 
 ### 3) 브리지 실행
 ```bash
 cd bridge
-python3 -m venv .venv && source .venv/bin/activate   # (선택)
+python3 -m venv .venv && source .venv/bin/activate   # (최초 1회)
 pip install -r requirements.txt
-cp config.example.yaml config.yaml   # serial.port(BT)·bt_address(MAC), api.url(센서ID), Bearer 토큰 채우기
+# config.yaml 은 이미 채워져 추적된다(센서ID·bt_address·Bearer 토큰).
+# ⚠️ `cp config.example.yaml config.yaml` 을 다시 실행하면 토큰이 <YOUR_TOKEN> placeholder 로
+#    덮여 인증이 401(UNAUTHENTICATED)로 깨진다. 토큰 교체가 필요할 때만 config.yaml 을 직접 편집.
 
-# API 없이 페이로드 미리보기 (대상 센서 GET → 피크 랜덤 스케일)
-python bridge.py --config config.yaml --dry-run
+# ★ 권장: BT 풀 사이클 복구 + 브리지 실행을 한 번에 (껐다 켤 때마다 SPP 재확보)
+./connect_and_run.sh            # 실전(실제 POST)
+./connect_and_run.sh --monitor  # 블루투스 수신만(POST 없음)
+./connect_and_run.sh --dry-run  # POST 없이 페이로드만
 
-# 하드웨어 없이 키보드로 흐름 테스트 (d=위험, n=평시, q=종료)
-python bridge.py --config config.yaml --simulate --dry-run
-
-# 블루투스 수신만 확인(POST 없음): 기울이면 STATE_CHANGED 가 찍힌다
-python bridge.py --config config.yaml --monitor
-
-# 실전: 블루투스 연결 + 기울이면 실제 API POST(위험 프로파일)
-python bridge.py --config config.yaml
-
-# 저장된 계측값 확인
-python bridge.py --config config.yaml --check
+# ── 또는 수동으로 직접(브리지를 껐다 켤 땐 위 풀 사이클을 먼저 돌릴 것) ──
+python bridge.py --config config.yaml --dry-run            # API 없이 페이로드 미리보기
+python bridge.py --config config.yaml --simulate --dry-run # 하드웨어 없이 키보드(d=위험, n=평시, q=종료)
+python bridge.py --config config.yaml --monitor            # 블루투스 수신만(POST 없음)
+python bridge.py --config config.yaml                      # 실전(실제 POST)
+python bridge.py --config config.yaml --check              # 저장된 계측값 확인(인증 200 점검)
 ```
 > 위험 시 보내는 변위의 **피크 랜덤 범위**(항상 3차=3mm 초과)는 `bridge/bridge.py` 상단
 > `PEAK_DISPLACEMENT_MIN_MM` / `PEAK_DISPLACEMENT_MAX_MM` 상수로 조정한다. 기준 프로파일의
@@ -148,10 +157,11 @@ python bridge.py --config config.yaml --check
 - [x] **블루투스 연결** — macOS `blueutil` 절차로 `BT_CONNECTED`·`STATE_CHANGED` 수신 검증.
 - [x] **온사이트 API 연동** — 기울임 → 3차 초과 위험 프로파일 POST(200) → 대시보드 위험 전환 확인.
       평시값(1mm 미만)도 POST로 복귀 가능.
-- [x] **브리지 견고화** — API 오류·BT 끊김에도 죽지 않고 재연결(끊기면 `blueutil --connect`로 무인 복구 — `config.yaml`의 `bt_address`), `DANGER` 디바운스로 중복 POST 방지.
+- [x] **상태 전환 안정화** — 펌웨어 dwell(후보 상태 1초 유지 후 전이 확정)로 손떨림 채터링 제거 + 브리지 엣지 래치(정상→기울어짐 1회만 POST)로 "기울임 1회 = POST 1회" 보장. 라이브 검증 완료.
+- [x] **브리지 견고화** — API 오류·BT 끊김에도 죽지 않고 재연결(끊기면 `blueutil --connect`로 무인 복구 — `config.yaml`의 `bt_address`), 엣지 래치로 중복 POST 방지.
 
 ### 현장 적용 시 조정
 - 모형 장착 자세에 맞춰 `esp32_inclinometer.ino`의 roll 임계(`TILTED/NORMAL_ROLL_THRESHOLD`) 튜닝.
 - 위험 피크 범위(`bridge/bridge.py`의 `PEAK_DISPLACEMENT_MIN/MAX_MM`), 디바운스(`POST_MIN_INTERVAL_S`)는 데모 톤에 맞게.
-- `config.yaml`에 대상 환경의 호스트·센서ID·Bearer 토큰 입력(토큰은 커밋 금지).
+- `config.yaml`에 대상 환경의 호스트·센서ID·Bearer 토큰 입력(데모 편의상 추적됨 — **원격 push 시 토큰 노출 주의**, push 전 토큰 제거/교체).
 - 평시 복귀 동선(자동/수동) 결정.
