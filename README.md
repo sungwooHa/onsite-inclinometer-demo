@@ -56,6 +56,7 @@ esp32-inclinometer-demo/
 │       └── esp32_inclinometer.ino     # MPU6050 roll 감지 + 블루투스 + 부저/버튼/LED
 ├── bridge/
 │   ├── bridge.py                      # BT(시리얼) 수신 → 위험 프로파일 POST (랜덤 피크·자동GET·에러 견고)
+│   ├── run.ps1                        # (Windows) outgoing COM 자동 탐지 후 브리지 실행
 │   ├── connect_and_run.sh             # BT 풀 사이클 복구 + 브리지 실행 한 번에(껐다 켤 때마다 안전)
 │   ├── RUNBOOK.md                     # 현장 운영자용 가이드(시작·복구 단계·금지사항)
 │   ├── payload.json                   # 기준 변위 프로파일(피크 스케일의 모양 / GET 폴백용)
@@ -126,7 +127,15 @@ ESP32는 줄 단위 JSON을 USB Serial과 블루투스로 동시에 출력한다
   - `config.yaml`의 `serial.bt_address`(ESP32 MAC)가 있으면 브리지가 포트 열기 전
     `blueutil --connect`로 무인 복구를 시도한다(전원만 껐다 켠 정도는 자동 회복).
   - ⚠️ 보드 버튼은 누르지 말 것(짧게=BT 재시작 / 길게=페어링 삭제 → 연결 깨짐).
-- **Windows**: 장치관리자에서 "나가는(outgoing)" COM 포트를 확인해 `config.yaml`의 `serial.port`에 넣는다.
+- **Windows**: 블루투스는 반드시 **"나가는(outgoing)" COM 포트**를 열어야 ESP32 가 연결로 인식한다.
+  ⚠️ 이 COM 번호는 **페어링/연결마다 Windows 가 다시 배정**해 자주 바뀐다(박아둔 번호로 열면
+  `FileNotFoundError`). 그래서 번호를 직접 넣는 대신 **`bridge/run.ps1`** 을 쓰면 `config.yaml` 의
+  `serial.bt_address`(ESP32 MAC)가 박힌 outgoing 포트를 **실행 직전에 자동 탐지**해 띄운다:
+  ```powershell
+  cd bridge
+  .\run.ps1            # 실전(실제 POST).  --monitor / --check / --dry-run 인자 그대로 전달
+  ```
+  COM 번호가 또 바뀌어도 `.\run.ps1` 만 다시 실행하면 된다(스크립트가 `config.local.yaml` 을 자동 생성).
 
 ### 3) 브리지 실행
 ```bash
