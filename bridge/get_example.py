@@ -15,9 +15,9 @@ import requests
 
 # ▼▼▼ 바꿔가며 테스트 ▼▼▼
 HOST    = "https://api.onsite.kr-qa-midasit.com"   # 환경 다르면 호스트 교체 (dev/stage/prod 등)
-TOKEN   = "<YOUR_TOKEN>"
-PROJECT = 38
-SENSOR  = 2104
+TOKEN   = "eyJhbGciOiJSUzUxMiJ9.eyJzdWIiOiIxMzEifQ.IODsPJjxHbmfQtJxmAhi_OamPu4KlheuxDyyzkn4Mmbf97A09itHH510C-yShmYNWmATKuiw6X0YuIVcElNmTLUNvq3iLfuxnGHo5D6c9HVG6HQpCEEWe2fw30V45UYZrdqtV33wsCiIHEKPIaKaupWzmKQFIN9iIY_Dwf8gnNfQX6mNnTNorQxBOyiHLqve5G8-9ucIfcuBp9pGVL8mTqQgy5vUJ28sEJBV1t0HNMuDKJ3N1hwJo7qO-DA0WsKxeM0cxHWK2JLbpvHxyDGI_p4SSroJh2VbIvLR-ygxvrAHLUM-NyKc3_T7Om3xgySJ2AuTFPKj8v2tC4TdpHSkMQ"
+PROJECT = 143
+SENSOR  = 2100
 # ▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲
 
 def show_jwt(tok):

@@ -18,10 +18,10 @@ serial:
 
 api:
   # 온사이트 계측 API (docs/api-contract.md). URL 끝 숫자(2100)가 센서ID.
-  url: "https://api.onsite.kr-qa-midasit.com/inclinometer/sensor/2104"
+  url: "https://api.onsite.kr-qa-midasit.com/inclinometer/sensor/2100"
   method: "POST"
   headers:
-    Authorization: "Bearer eyJhbGciOiJSUzUxMiJ9.eyJzdWIiOiIyOSJ9.kqNL4pI23ijq1JotVtuR7oyprM55EYgW1DfGDKULgtXEhWKMovt18zuhxODuZmMLXEE57x6tuQC0R0lZuGgpxjInyGaODSXpA1tkF420PhwhzYTYfiRtJe2DNFPxp3nlI1S7lR7BkGLlLTKZN48YdJcq9y8MK5SxNt2lKMDPLFQC6gsH0NvMdG34CbadmBTZGrIF9CA1gJxZgL5XlN3U6qI2U5Ry5S23NliQBx7c7Jygs8Gpycwl4a9dVivJdDQUytmWFh-mUjchZh9i77aTHgpXoN0xoeQ9IFEqimpTcKsFONqgo4VUvp6KA4V423f-Mdg0nv7PUQRQowUHDi8BKA"
+    Authorization: "Bearer eyJhbGciOiJSUzUxMiJ9.eyJzdWIiOiIxMzEifQ.IODsPJjxHbmfQtJxmAhi_OamPu4KlheuxDyyzkn4Mmbf97A09itHH510C-yShmYNWmATKuiw6X0YuIVcElNmTLUNvq3iLfuxnGHo5D6c9HVG6HQpCEEWe2fw30V45UYZrdqtV33wsCiIHEKPIaKaupWzmKQFIN9iIY_Dwf8gnNfQX6mNnTNorQxBOyiHLqve5G8-9ucIfcuBp9pGVL8mTqQgy5vUJ28sEJBV1t0HNMuDKJ3N1hwJo7qO-DA0WsKxeM0cxHWK2JLbpvHxyDGI_p4SSroJh2VbIvLR-ygxvrAHLUM-NyKc3_T7Om3xgySJ2AuTFPKj8v2tC4TdpHSkMQ"
     Content-Type: "application/json"
 
 # DANGER 시: 대상 센서의 최신 프로파일을 GET해 심도 그리드/모양을 자동으로 맞추고,
