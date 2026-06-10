@@ -44,7 +44,12 @@
 
 ## 5. 검증 (GET)
 `python bridge.py --config config.yaml --check` → 현재 저장된 계측값을 조회해 출력
-(예제 `inclinometer_get.py` 와 동일 요청).
+(예제 `inclinometer_get.py` 와 동일 요청. 빠른 연결 점검은 `bridge/get_example.py`).
+
+> **읽기↔쓰기 스키마 비대칭(주의).** GET 응답은
+> `{ "results": [ { "measurementTime": "...", "data": [ {"depth","displacement"} ], "isReference", "isValid" } ], "page", ... }`
+> 로, POST 본문의 `measurement_date`/`sensor_data` 와 **필드명이 다르다**. 같은 데이터인데 이름만 다른 것이니
+> "포맷이 깨졌다"고 오해하지 말 것. 전송은 §2 본문 스키마 그대로 쓰면 200(검증 완료).
 
 ## 6. 확정된 운영 결정
 - **평시 복귀**: 브리지는 NORMAL 이벤트를 무시한다. 평시 복귀는 **프로젝트에서 자체 처리**.

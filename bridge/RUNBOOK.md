@@ -92,15 +92,16 @@ cd "/Users/hsw0312/workspace/02 lab/esp32-inclinometer-demo/bridge"
 | `./connect_and_run.sh --monitor` | 수신만 출력, **전송 안 함** (연결 확인·리허설) |
 | `./connect_and_run.sh --dry-run` | 보낼 데이터만 출력, **전송 안 함** |
 
-### 이력 데이터 시드 (`seed_2100.py`)
+### 전송 예제 (`post_example.py`)
 
-대상 센서(2100 / 프로젝트 143 / IN-9A AUTO)에 시연용 이력 3건(평시 06-03·06-04 + 위험 06-11)을
-한 번에 넣어 대시보드에 "평시 → 위험" 추세를 만든다. URL/토큰은 `config.yaml` 을 그대로 쓴다.
+`payload.json`(가장 최근 측정 = 06-11 위험 프로파일)을 센서 2100(프로젝트 143 / IN-9A AUTO)으로
+**1건** 전송한다. URL/토큰은 `config.yaml` 을 그대로 쓴다.
+본문 스키마는 `measurement_date`/`unit`/`sensor_data`(쓰기) — GET 응답의 `measurementTime`/`data`(읽기)와 필드명이 다르다.
 
 | 명령 | 동작 |
 |------|------|
-| `python seed_2100.py --config config.yaml --dry-run` | 페이로드만 출력, **전송 안 함** |
-| `python seed_2100.py --config config.yaml` | **실제 POST 3건** (이력 삽입) |
+| `python post_example.py --config config.yaml --dry-run` | 본문만 출력, **전송 안 함** |
+| `python post_example.py --config config.yaml` | **실제 전송 1건** (최근 측정) |
 
 ---
 
