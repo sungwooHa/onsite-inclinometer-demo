@@ -208,6 +208,7 @@ def run_serial(cfg, dry_run):
         sys.exit("pyserial 미설치: pip install -r requirements.txt")
     sc = cfg["serial"]
     last_danger = 0.0
+    armed = True  # 엣지 트리거: NORMAL을 본 뒤에만 다음 DANGER를 1회 POST. 초기엔 무장.
     while True:  # 시리얼/BT가 끊겨도 죽지 않고 재연결 시도(데모 중 끊김 방어)
         bt_reconnect(sc)  # (macOS) 포트 열기 전 BT 링크부터 살린다(blueutil --connect)
         try:
@@ -223,12 +224,16 @@ def run_serial(cfg, dry_run):
                         continue  # 텔레메트리 깨짐/부분 수신 등은 무시
                     action = event_to_action(msg)
                     if action == "DANGER":
+                        if not armed:
+                            continue  # 엣지 트리거: NORMAL 복귀 전까지 재전송 안 함
                         now = time.monotonic()
                         if now - last_danger < POST_MIN_INTERVAL_S:
-                            continue  # 디바운스: 짧은 시간 내 중복 DANGER 무시
+                            continue  # 디바운스: 같은-순간 중복/서버 보호(보조)
                         last_danger = now
+                        armed = False
                         handle_event(cfg, "DANGER", dry_run)
                     elif action == "NORMAL":
+                        armed = True  # 정상 복귀 → 다음 기울임에서 다시 1회 POST
                         handle_event(cfg, "NORMAL", dry_run)
         except KeyboardInterrupt:
             raise

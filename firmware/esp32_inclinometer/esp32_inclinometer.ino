@@ -46,6 +46,10 @@ const float GYRO_SCALE  = 131.0;   // ±250 deg/s 가정
 const float TILTED_ROLL_THRESHOLD = -100.0;
 const float NORMAL_ROLL_THRESHOLD = -97.0;
 
+// candidate 상태가 이 시간 이상 연속 유지돼야 전이를 확정한다.
+// 1초 미만의 순간 떨림은 전이로 치지 않아 STATE_CHANGED가 나가지 않는다.
+const unsigned long STATE_DWELL_MS = 1000;
+
 const float MOVING_GYRO_THRESHOLD = 5.0;
 
 // =========================
@@ -91,6 +95,10 @@ bool longPressHandled = false;
 // =========================
 String currentState = "알수없음";
 String previousState = "알수없음";
+
+// dwell(유지시간) 게이트: candidate가 STATE_DWELL_MS 이상 유지돼야 확정
+String candidateState = "알수없음";
+unsigned long candidateSince = 0;
 
 float lastPitch = 0.0;
 float lastRoll = 0.0;
@@ -532,11 +540,27 @@ void updateSensorState() {
   lastGyroZ = gz;
   lastMoving = isMoving;
 
-  // 히스테리시스 상태 판정
+  // 히스테리시스 상태 판정 (candidate만 결정, 아직 확정 아님)
+  // -100.0 ~ -97.0 갭 안에서는 candidate를 바꾸지 않아 현재 candidate 유지
+  String candidate = candidateState;
   if (roll < TILTED_ROLL_THRESHOLD) {
-    currentState = "기울어짐";
+    candidate = "기울어짐";
   } else if (roll > NORMAL_ROLL_THRESHOLD) {
-    currentState = "정상";
+    candidate = "정상";
+  }
+
+  unsigned long now = millis();
+
+  // dwell 게이트: candidate가 바뀌면 타이머 리셋(전이 취소/재시작)
+  if (candidate != candidateState) {
+    candidateState = candidate;
+    candidateSince = now;
+  }
+
+  // candidate가 현재 확정 상태와 다르고, STATE_DWELL_MS 이상 연속 유지됐을 때만 확정
+  if (candidateState != currentState &&
+      (now - candidateSince) >= STATE_DWELL_MS) {
+    currentState = candidateState;
   }
 
   // 상태 변경 순간에만 이벤트 출력 + Bluetooth 전송
