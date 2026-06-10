@@ -118,6 +118,9 @@ ESP32는 줄 단위 JSON을 USB Serial과 블루투스로 동시에 출력한다
   blueutil --unpair $ADDR; blueutil --pair $ADDR; blueutil --connect $ADDR
   ```
   그 **직후** `bridge.py`가 포트(`/dev/cu.MIDAS_ONSITE_SENSOR`)를 열게 한다(갓 pair한 직후 open이 핵심).
+  - macOS는 연결마다 포트 노드 끝에 `-1`/`-2` 접미사를 붙일 수 있다 — 브리지가 `serial.port`를
+    **접두사**로 보고 매칭되는 실제 노드(가장 최근 생성)를 자동으로 골라 연다(정전·재페어 후에도 그대로).
+    Windows의 `run.ps1`(MAC으로 outgoing COM 탐지)에 대응하는 macOS 쪽 자동탐지다.
   - `pair`가 `0x02 (No Connection)`로 실패해도 무시 — 곧이은 `connect`/브리지가 SPP를 살린다.
   - ⚠️ **브리지를 껐다 켤 때마다**(예: `--monitor`↔`--dry-run` 전환) SPP가 깨진다. 이때
     `blueutil --connect`(브리지 자동 재연결)만으로는 ACL은 붙어도 SPP가 안 붙어 포트는

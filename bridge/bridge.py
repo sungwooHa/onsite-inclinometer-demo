@@ -232,6 +232,9 @@ def resolve_port(sc):
       - 없으면 port + '*' 로 glob 해 매칭 노드를 쓴다(접미사 흡수). 여러 개면
         가장 최근 생성된 노드(=현재 연결)를 골라 옛 유령 노드를 피한다.
     매칭이 없으면 원래 값을 그대로 돌려준다(열기 실패 메시지는 동일).
+
+    Windows: COM 은 파일 노드가 아니라 이 glob 이 안 먹는다(통과). Windows 쪽
+    COM 번호 드리프트는 run.ps1 이 MAC 으로 outgoing COM 을 찾아 처리한다 — 의도된 분리.
     """
     port = sc["port"]
     if "*" in port:
